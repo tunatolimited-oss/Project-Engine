@@ -523,6 +523,9 @@
   strat('hurdle', 'Your own deal hurdle', [
     ['minStabilizedYield', 'Minimum stabilized yield', { t: 'pct', d: 0.065 }], ['minCashFlowPerUnit', 'Minimum stabilized cash flow per unit', { t: 'money', d: 0, u: '/mo' }],
     ['exemptHouseHack', 'Exempt the one you live in', { t: 'bool', d: true, sw: true }]]);
+  strat('stopBuying', 'Stop buying on a date', [
+    ['month', 'Last purchase no later than', { t: 'month', d: '2034-12', c: 'choice',
+      h: 'A purchase costs cash flow for its first year or two while leases turn over. If what matters is income on a date, stopping a year or two before it can raise that income.' }]]);
   strat('goalStop', 'Stop buying at a goal', [['monthlyIncome', 'Once after-tax income reaches', { t: 'money', d: 8000, u: '/mo' }]]);
   def(S + '.guardrails.enabled', { l: 'Portfolio guardrails', g: S, s: 'Portfolio guardrails', t: 'bool', d: true, sw: true, c: 'choice', n: 'breakers',
     h: 'Ship at ruin-avoidance levels. Tighten them to find where your plan actually stops.' });

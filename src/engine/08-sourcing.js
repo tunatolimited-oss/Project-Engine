@@ -89,7 +89,7 @@
 
   /* ----------------------------------------------------------- candidates */
   function fromListing(env, rec, t) {
-    var cfg = env.cfg, M = env.M, dm = FPE.data.dataMonth;
+    var cfg = env.cfg, M = env.M, dm = rec.asOf ? U.parseMonth(rec.asOf) : FPE.data.dataMonth;   // prices are as of when they were read
     var drift = cfg.market.driftListings;
     var pf = drift ? M.priceIndex(t) / M.priceIndex(dm) : 1;
     var rf = drift ? M.rentIndex(t) / M.rentIndex(dm) : 1;

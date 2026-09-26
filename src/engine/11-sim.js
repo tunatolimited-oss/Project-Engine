@@ -48,6 +48,7 @@
     var ya = newYear();
     var lastNeed = null;             // cash the most recent candidate needed — the paydown war chest
     var lastFull = null;             // the last fully underwritten "not yet" answer
+    var injectDone = false, injectLog = [];
 
     function newYear() {
       return { wages: 0, w2Hours: 0, passiveNet: 0, nonPassiveNet: 0, investOrdinary: 0, investTbill: 0, investLtcg: 0,
@@ -275,6 +276,7 @@
       if (lm.jobless && cfg.life.breakers.jobLoss.enabled) why = 'jobLoss';
       else if (LF.breakers.negCF) why = 'negativeCashFlow';
       else if (ST.goalStop.enabled && trailing(incomeHist, 12) >= ST.goalStop.monthlyIncome) why = 'goalMet';
+      else if (ST.stopBuying.enabled && t > U.parseMonth(ST.stopBuying.month)) why = 'stopDate';
       else if (ST.downturn.enabled && ST.downturn.stance === 'stepBack' && M.recession(t)) why = 'downturnPause';
       else if (ST.paydown.enabled && ST.paydown.allocation === 'pauseBuying' && S.props.length >= ST.paydown.startAfterProperties && S.props.length > 0) why = 'paydownPause';
       else if (t - SO.lastClose < cfg.sourcing.minMonthsBetween) why = 'dealFlow';
@@ -282,6 +284,14 @@
       if (why) return { blocked: why };
 
       var cands = SRC.candidates(env, SO, t);
+      /* a listing under analysis: on offer from its month for its window, and
+         bought ahead of anything else the first month it passes every gate */
+      var inj = opts.inject, injCand = null;
+      if (inj && !injectDone && t >= inj.month && t < inj.month + (inj.window || 3)) {
+        injCand = SRC.fromListing(env, inj.listing, t);
+        injCand.origin = 'injected'; injCand.sourceId = 'injected'; injCand.channel = inj.listing.channel || 'mls';
+        cands = cands.concat([injCand]);
+      }
       if (!cands.length) return { blocked: 'noDeals' };
       var hh = houseHackIntent(t);
       /* cheap test first: if cash cannot reach even the smallest down payment
@@ -294,7 +304,7 @@
       var cheapest = Math.min.apply(null, cands.map(function (c) { return c.price; }));
       var floorCash = cheapest * (lowDown + Math.min(cfg.market.closingCostPct, cfg.strategies.sellerFinance.closingCostPct || 1));
       var helocRoom = (ST.heloc.enabled && !STR.helocFrozen(env, t)) ? Math.max(0, S.heloc.limit - S.heloc.balance) : 0;
-      if (usable() + helocRoom < floorCash && lastFull && lastFull.t > t - 12) {
+      if (!injCand && usable() + helocRoom < floorCash && lastFull && lastFull.t > t - 12) {
         return { blocked: lastFull.res.blocked, detail: lastFull.res.detail, carried: true };
       }
       var bk = book(t, lm.jobless);
@@ -362,6 +372,12 @@
         });
       });
       var ok = options.filter(function (o) { return !o.fails.length; });
+      if (injCand) {
+        var injOpts = options.filter(function (o) { return o.cand === injCand; });
+        injectLog.push({ t: t, options: injOpts.map(function (o) { return { product: o.product, fails: o.fails, uw: o.uw, st: o.st, ownerOcc: o.ownerOcc }; }) });
+        var injOk = ok.filter(function (o) { return o.cand === injCand; });
+        if (injOk.length) ok = injOk;
+      }
       if (hh && ok.some(function (o) { return o.ownerOcc; })) ok = ok.filter(function (o) { return o.ownerOcc; });
       if (!ok.length) {
         lastNeed = nearest ? nearest.need : null;
@@ -427,7 +443,7 @@
         S.props.forEach(function (q) { if (q.ownerOccupied) q.ownerUntil = t + 1; });
         LF.housing = { mode: 'househack', propSeq: p.seq, since: t, hhCount: LF.housing.hhCount + 1, home: null };
       }
-      SRC.consume(env, SO, cand, t, uw.product === 'seller');
+      if (cand.origin === 'injected') injectDone = true; else SRC.consume(env, SO, cand, t, uw.product === 'seller');
       S.props.push(p);
       ya.reHours += cfg.life.hours.perAcquisition;
       ya.acquisitions++;
@@ -677,7 +693,7 @@
       /* 12. paydown that outranks buying */
       var PD = cfg.strategies.paydown, paid = 0;
       if (PD.enabled && PD.allocation === 'pauseBuying' && S.props.length >= PD.startAfterProperties && S.freeClear < PD.stopAfterFreeClear) {
-        paid += paydown(t, usable() - efRequired(t));
+        paid += paydown(t, usable() - efRequired(t) - cushion(t));
       }
 
       /* 13. acquisition */
@@ -750,7 +766,7 @@
           var spare = usable() - warChest;
           if (PD.allocation === 'split') spare = Math.min(spare, Math.max(0, lm.contribution + agg.cf) * PD.splitPct);
           paid += paydown(t, spare);
-        } else if (cfg.cash.policy === 'bestUse' && blocked && ['dealFlow', 'noDeals', 'goalMet', 'jobLoss', 'downturnPause', 'negativeCashFlow'].indexOf(blocked.blocked) >= 0) {
+        } else if (cfg.cash.policy === 'bestUse' && blocked && ['dealFlow', 'noDeals', 'goalMet', 'jobLoss', 'downturnPause', 'negativeCashFlow', 'stopDate'].indexOf(blocked.blocked) >= 0) {
           var tgt = STR.paydownTarget(env, S);
           if (tgt) {
             var loanAfterTax = (tgt.loan.rate + (tgt.loan.miRate || 0)) * (1 - S.marginal);
@@ -936,6 +952,7 @@
     var ms = function (k) { var m = milestones.filter(function (x) { return x.kind === k; })[0]; return m ? m.t : null; };
     return {
       cfg: cfg, rows: rows, years: years, acquisitions: acquisitions, milestones: milestones, properties: S.props, state: S, series: series,
+      inject: opts.inject ? { bought: acquisitions.filter(function (a) { return a.origin === 'injected'; })[0] || null, log: injectLog } : null,
       summary: {
         start: start, end: lastT, target: target,
         incomeAtTarget: incomeAtTarget, incomeAtTargetReal: incomeAtTarget / cpiTarget,
