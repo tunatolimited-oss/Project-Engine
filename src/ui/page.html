@@ -1,0 +1,35 @@
+<title>Fargo Portfolio Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>/*@CSS@*/</style>
+
+<div class="app" id="app">
+  <header class="top" id="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <div class="wordmark">Fargo Portfolio Engine</div>
+        <div class="brand-sub">Small multifamily, Fargo ND · data collected Sept 2026</div>
+      </div>
+    </div>
+    <div class="planbar" id="planbar"></div>
+  </header>
+
+  <aside class="rail" id="rail" aria-label="Your plan"></aside>
+
+  <main class="main" id="main">
+    <nav class="views" id="views" role="tablist" aria-label="Views"></nav>
+    <section class="view" id="view-plan" role="tabpanel" aria-labelledby="tab-plan"></section>
+    <section class="view" id="view-deal" role="tabpanel" aria-labelledby="tab-deal" hidden></section>
+    <section class="view" id="view-next" role="tabpanel" aria-labelledby="tab-next" hidden></section>
+    <section class="view" id="view-strategies" role="tabpanel" aria-labelledby="tab-strategies" hidden></section>
+    <section class="view" id="view-assumptions" role="tabpanel" aria-labelledby="tab-assumptions" hidden></section>
+    <section class="view" id="view-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden></section>
+    <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden></section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script id="fpe-engine">/*@ENGINE@*/</script>
+<script>/*@UI@*/</script>

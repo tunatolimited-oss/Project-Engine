@@ -1,0 +1,12 @@
+{
+  "name": "fargo-portfolio-engine",
+  "private": true,
+  "description": "Month-by-month simulation of a small multifamily portfolio in Fargo, ND, with an uncertainty layer, a recommender and a deal analyzer.",
+  "scripts": {
+    "test": "node test/run.js",
+    "build": "node tools/build.js",
+    "test:browser": "node test/browser.js",
+    "report:stage-a": "node tools/stage-a-report.js",
+    "report:findings": "node tools/findings-report.js"
+  }
+}

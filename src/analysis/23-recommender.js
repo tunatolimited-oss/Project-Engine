@@ -92,30 +92,35 @@
        carries, a recession, falling rates) are invisible to the calm run:
        judge them on a small set of simulated futures instead, against the
        climbed plan, on the same seeds */
-    var miniPaths = opts.miniPaths || 40, seed0 = opts.seed != null ? opts.seed : cfg.mc.seed;
-    function miniMean(c) {
-      var mc = FPE.mc.run(c, { paths: miniPaths, seed: seed0, series: false });
-      return U.sum(Array.prototype.slice.call(mc.incomeAtTarget)) / miniPaths;
+    var miniPaths = opts.miniPaths || 60, seed0 = opts.seed != null ? opts.seed : cfg.mc.seed;
+    function miniRun(c) { return Array.prototype.slice.call(FPE.mc.run(c, { paths: miniPaths, seed: seed0, series: false }).incomeAtTarget); }
+    function miniMean(c) { return U.sum(miniRun(c)) / miniPaths; }
+    /* paired difference on the same futures: the mean, and whether it clears
+       twice its standard error (so noise is not mistaken for value) */
+    function pairedGain(a, b) {
+      var d = b.map(function (x, i) { return x - a[i]; }), n = d.length, m = U.sum(d) / n;
+      var sd = Math.sqrt(U.sum(d, function (x) { return (x - m) * (x - m); }) / Math.max(1, n - 1));
+      return { mean: m, clear: m > 2 * sd / Math.sqrt(n) };
     }
     var stoch = moves(top.cfg, opts.wouldDo).filter(function (m) { return CAT().byId(m.entry).stochastic; });
     if (stoch.length && kind === 'incomeByDate') {
       var used = {}; top.taken.forEach(function (m) { used[m.entry] = true; });
-      var baseMini = miniMean(top.cfg);
+      var baseRun = miniRun(top.cfg);
       prog('futures', 0, stoch.length);
       stoch.forEach(function (m, i) {
         if (used[m.entry]) return;
-        var gm = miniMean(withPatch(top.cfg, m.patch)) - baseMini;
-        m.miniGain = gm;
+        var g = pairedGain(baseRun, miniRun(withPatch(top.cfg, m.patch)));
+        m.miniGain = g.mean; m.miniClear = g.clear;
         var single = all.filter(function (x) { return x.key === m.key; })[0];
-        if (single) single.miniGain = gm;
+        if (single) { single.miniGain = g.mean; single.miniClear = g.clear; }
         prog('futures', i + 1, stoch.length);
       });
-      stoch.filter(function (m) { return m.miniGain > minGain; })
+      stoch.filter(function (m) { return m.miniClear && m.miniGain > minGain; })
         .sort(function (a, b) { return b.miniGain - a.miniGain; })
         .forEach(function (m) {
           if (used[m.entry]) return;
-          var c2 = withPatch(top.cfg, m.patch), g2 = miniMean(c2) - baseMini;
-          if (g2 > minGain) { top.cfg = c2; top.taken.push(m); used[m.entry] = true; baseMini += g2; m.viaFutures = true; }
+          var c2 = withPatch(top.cfg, m.patch), r2 = miniRun(c2), g2 = pairedGain(baseRun, r2);
+          if (g2.clear && g2.mean > minGain) { top.cfg = c2; top.taken.push(m); used[m.entry] = true; baseRun = r2; m.viaFutures = true; }
         });
       top.score = detScore(top.cfg).score; evaluated++;
     }

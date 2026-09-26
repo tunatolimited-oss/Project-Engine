@@ -15,86 +15,92 @@ Each row adds one correction to the row above. The first row is the new engine r
 
 | Step | Buys | Units | Income at Dec 2036 | Income, last 12 mo | Net worth held | If sold | Part-time | Quit |
 |---|---:|---:|---:|---:|---:|---:|---|---|
-| Old assumptions, run through the new engine | 9 | 27 | $4,421 | $5,484 | $1.19M | $905K | May 2032 | Feb 2038 |
-| 1. Rents reach market only at turnover (no free ramp) | 10 | 30 | $3,874 | $5,263 | $1.23M | $930K | Jul 2033 | May 2040 |
-| 2. DSCR counts the lesser of lease and market rent | 10 | 30 | $3,874 | $5,263 | $1.23M | $930K | Jul 2033 | May 2040 |
-| 3. Rates from their own sources (7.60% / 7.35%) | 10 | 30 | $3,456 | $4,350 | $1.23M | $919K | Feb 2034 | — |
-| 4. Insurance +8% only through 2028, then 4% | 10 | 30 | $3,895 | $6,073 | $1.21M | $908K | Oct 2033 | Aug 2039 |
-| 5. One price index (rents ÷ cap rate) | 10 | 30 | $4,193 | $6,521 | $1.11M | $840K | Aug 2033 | Jul 2038 |
-| 6. Deals ranked on stabilized yield | 10 | 30 | $4,193 | $6,521 | $1.11M | $840K | Aug 2033 | Jul 2038 |
-| 7. Listings expire six months after collection | 10 | 30 | $4,193 | $6,521 | $1.11M | $840K | Aug 2033 | Jul 2038 |
-| 8. Deal supply from channels, not a flat 3 a year | 10 | 30 | $4,193 | $6,521 | $1.11M | $840K | Aug 2033 | Jul 2038 |
-| 9. Agency gates: DTI, FHA self-sufficiency, Fannie reserves | 10 | 30 | $4,193 | $6,521 | $1.11M | $840K | Aug 2033 | Jul 2038 |
+| Old assumptions, run through the new engine | 10 | 29 | $3,594 | $4,655 | $1.23M | $928K | Jul 2033 | — |
+| 1. Rents reach market only at turnover (no free ramp) | 9 | 26 | $3,186 | $4,278 | $1.21M | $926K | Dec 2034 | — |
+| 2. DSCR counts the lesser of lease and market rent | 9 | 26 | $3,186 | $4,278 | $1.21M | $926K | Dec 2034 | — |
+| 3. Rates from their own sources (7.60% / 7.35%) | 9 | 26 | $2,580 | $3,523 | $1.15M | $867K | Aug 2035 | — |
+| 4. Insurance +8% only through 2028, then 4% | 10 | 29 | $3,099 | $4,798 | $1.19M | $897K | Mar 2035 | — |
+| 5. One price index (rents ÷ cap rate) | 10 | 29 | $3,411 | $5,266 | $1.10M | $840K | Nov 2034 | Oct 2040 |
+| 6. Deals ranked on stabilized yield | 9 | 27 | $3,904 | $5,965 | $1.10M | $855K | Dec 2033 | Sep 2039 |
+| 7. Listings expire six months after collection | 9 | 27 | $3,904 | $5,965 | $1.10M | $855K | Dec 2033 | Sep 2039 |
+| 8. Deal supply from channels, not a flat 3 a year | 9 | 24 | $2,428 | $4,290 | $1.07M | $812K | Jul 2035 | — |
+| 9. Agency gates: DTI, FHA self-sufficiency, Fannie reserves | 9 | 24 | $2,428 | $4,290 | $1.07M | $812K | Jul 2035 | — |
 
 ## The 7K plan, walked the same way
 
 | Step | Buys | Units | Income at Dec 2036 | Income, last 12 mo | Net worth held | If sold | Part-time | Quit |
 |---|---:|---:|---:|---:|---:|---:|---|---|
-| Old assumptions, run through the new engine | 11 | 32 | $5,515 | $6,488 | $1.47M | $1.09M | Oct 2031 | Mar 2035 |
-| 1. Rents reach market only at turnover (no free ramp) | 9 | 26 | $1,824 | $2,174 | $1.28M | $946K | Nov 2032 | — |
-| 2. DSCR counts the lesser of lease and market rent | 9 | 26 | $1,824 | $2,174 | $1.28M | $946K | Nov 2032 | — |
-| 3. Rates from their own sources (7.60% / 7.35%) | 15 | 44 | $640 | $1,679 | $1.82M | $1.33M | Jan 2040 | — |
-| 4. Insurance +8% only through 2028, then 4% | 14 | 41 | $1,418 | $3,785 | $1.80M | $1.32M | Sep 2037 | — |
-| 5. One price index (rents ÷ cap rate) | 14 | 41 | $1,763 | $4,112 | $1.63M | $1.21M | Nov 2036 | — |
-| 6. Deals ranked on stabilized yield | 14 | 42 | $1,913 | $4,127 | $1.59M | $1.17M | Jun 2036 | — |
-| 7. Listings expire six months after collection | 14 | 42 | $1,913 | $4,127 | $1.59M | $1.17M | Jun 2036 | — |
-| 8. Deal supply from channels, not a flat 3 a year | 14 | 42 | $1,913 | $4,127 | $1.59M | $1.17M | Jun 2036 | — |
-| 9. Agency gates: DTI, FHA self-sufficiency, Fannie reserves | 14 | 42 | $1,913 | $4,127 | $1.59M | $1.17M | Jun 2036 | — |
+| Old assumptions, run through the new engine | 10 | 29 | $5,073 | $5,868 | $1.47M | $1.12M | Dec 2031 | Sep 2036 |
+| 1. Rents reach market only at turnover (no free ramp) | 11 | 32 | $4,654 | $6,308 | $1.54M | $1.16M | Feb 2033 | Aug 2037 |
+| 2. DSCR counts the lesser of lease and market rent | 11 | 32 | $4,654 | $6,308 | $1.54M | $1.16M | Feb 2033 | Aug 2037 |
+| 3. Rates from their own sources (7.60% / 7.35%) | 12 | 35 | $4,066 | $5,576 | $1.56M | $1.16M | Oct 2033 | Aug 2039 |
+| 4. Insurance +8% only through 2028, then 4% | 12 | 35 | $4,695 | $6,894 | $1.55M | $1.15M | Jul 2033 | Jul 2037 |
+| 5. One price index (rents ÷ cap rate) | 12 | 35 | $5,062 | $7,418 | $1.42M | $1.07M | Apr 2033 | Nov 2036 |
+| 6. Deals ranked on stabilized yield | 11 | 33 | $5,207 | $7,400 | $1.37M | $1.04M | Dec 2032 | Jun 2036 |
+| 7. Listings expire six months after collection | 11 | 33 | $5,207 | $7,400 | $1.37M | $1.04M | Dec 2032 | Jun 2036 |
+| 8. Deal supply from channels, not a flat 3 a year | 11 | 29 | $3,826 | $6,491 | $1.44M | $1.09M | Jun 2034 | Apr 2039 |
+| 9. Agency gates: DTI, FHA self-sufficiency, Fannie reserves | 11 | 29 | $3,826 | $6,491 | $1.44M | $1.09M | Jun 2034 | Apr 2039 |
 
 ## Corrected baseline, in words
 
-- Buildings bought: **10** (unit counts in order: 3, 3, 3, 3, 3, 3, 3, 3, 3, 3).
-- After-tax income at December 2036: **$4,193/month** in today's dollars.
-- Part-time from **Aug 2033**, quit **Jul 2038**.
-- Net worth at the horizon: **$1.11M** held, **$840K** if everything were sold and taxed.
+- Buildings bought: **9** (unit counts in order: 2, 3, 3, 2, 3, 2, 3, 3, 3).
+- After-tax income at December 2036: **$2,428/month** in today's dollars.
+- Part-time from **Jul 2035**, quit **—**.
+- Net worth at the horizon: **$1.07M** held, **$812K** if everything were sold and taxed.
 
 ## What the walk shows
 
-1. **The free rent ramp was the single biggest flattery.** On the 7K plan it
-   was worth two-thirds of the income at 2036 ($5,515 → $1,824 a month).
-   Rents now move only when a lease ends: a pushed renewal, or a new tenant
-   after downtime, a turn cost and (by default) a $5,000 refresh.
-2. **Rates from their own sources are the second.** 7.60% conventional and
-   7.35% DSCR instead of 6.95% and 6.35%. On the 7K plan this *raises* the
-   number of purchases (15 instead of 9) while cutting income. The reason is
-   the career model: with thinner cash flow you stay full-time longer, keep
-   contributing $7,000 a month, keep buying, and hire a manager because your
-   10 hours a week run out. Buying more is not the same as earning more.
-3. **Insurance, and prices following rents, each give some back.** Ending
-   the 8% insurance inflation in 2028 (as its source says) and pricing
-   buildings off rents instead of a separate appreciation rate both improve
-   the result.
-4. **Several corrections change nothing on these plans, and that is
-   informative.** The DSCR rent basis, the ranking rule, library expiry, deal
-   supply and the agency gates don't bind, because **cash binds first**. Every
-   building is bought on a DSCR loan, and gross rent over PITIA clears 1.0
-   comfortably. They will bind in other plans (a W-2-only buyer on
-   conventional loans, bigger contributions, an off-market pipeline), so they
-   stay.
-5. **Every purchase is a triplex, and that rests on two sales.** The triplex
-   archetype is the cheapest per unit ($69,750) with in-place rents at 67% of
-   market. It is built from F4 (1898) and F5 (1949), both with owner-paid
-   heat. Switch triplexes off and income at 2036 falls about 40%. The
-   sensitivity view in Stage D ranks inputs like this so you can see what
-   to verify first.
-6. **"Income at a date" punishes buying just before the date.** A purchase
-   is cash-flow negative for its first year or two while leases turn over.
-   The 7K plan keeps buying through 2036, so its income on that date is low
-   even though the portfolio is large. The recommender (Stage D) tests
-   stopping earlier, paying down, or holding cash as real alternatives.
+1. **Deal supply is the largest correction.** On your defaults it costs
+   $1,476 a month of 2036 income. The old engine let you buy the best-priced
+   building type whenever your cash allowed. The rebuilt one makes you wait
+   for that type to list once you can afford it, at Fargo's rate of 2–4 unit
+   listings times the share you win. Both numbers are estimates (the win
+   rate is a guess), so this is also the first thing to calibrate: ask an
+   agent for a year of 2–4 unit MLS sales and how many had multiple offers.
+2. **Sourced rates are next** (−$606 a month): 7.60% conventional and 7.35%
+   DSCR instead of 6.95% and 6.35%.
+3. **The free rent ramp costs less than the audit measured** (−$408 on your
+   defaults, −$419 on the 7K plan, against the audit's much larger figure).
+   The audit measured it inside an engine whose other assumptions were also
+   flattering. Here the other corrections are already in place around it.
+   It still matters: rents now move only at a renewal push or a new tenant,
+   after downtime and a turn cost.
+4. **Three corrections give some back:**
+   - insurance inflation ending in 2028, as its source says (+$519);
+   - buying on stabilized yield instead of day-one cash-on-cash (+$493),
+     which picks triplexes with room to grow;
+   - pricing buildings off rents (+$312).
+5. **Several corrections change nothing on these plans:** the DSCR rent
+   basis, library expiry, and the agency gates. Cash binds before any
+   lender rule does. They will bind in other plans (conventional loans with
+   a W-2, bigger contributions), so they stay.
+
+## Which old conclusions survive
+
+- **"The plan depends on turning rents to market"** survives, as the
+  turnover model rather than a ramp. The recommender's best strategies (RUBS,
+  vouchers, heat) are other routes to the same rent.
+- **"Deal flow is not the binding constraint"** does not survive. With
+  realistic supply, waiting for the right building is the largest single
+  drag. The audit found the flat 3-a-year cap never bound. That was true,
+  but only because the old engine let every type be available whenever
+  cash allowed.
+- **"Seller financing is the largest lever"** does not survive. It was a
+  hash artifact, and judged on simulated futures its gain is within the
+  noise.
+- **"Net worth $3.37M on the 7K plan"** becomes $1.44M held, or $1.09M if
+  sold and taxed, in today's dollars, on the calm run.
+- **"Freedom date"** splits into two dates, part-time and quit. On the 7K
+  plan's calm run they are June 2034 and April 2039. In 80% of simulated
+  futures you are part-time by January 2040 and still employed at the
+  horizon.
 
 ## Engine fixes found while building Stage A
 
 - The negative-cash-flow stop rule tripped on the house-hack for twelve
-  years, because the rent you no longer pay was not counted. It now uses a
-  trailing average of cash flow that includes that rent, so one turnover
-  month neither trips it nor resets it.
-- The HELOC never repaid (its repayment setting was unused) and had no line
-  cap, so it grew to $1.8M. It now repays from a share of each month's
-  surplus, caps at the lender's line limit ($150K default, an estimate), and
-  its payment counts in debt-to-income.
-- A flat vacancy setting was silently ignored when rents follow turnover.
+  years. It now looks only at the rentals, on a trailing average.
+- The HELOC never repaid and had no line cap. It now repays from surplus,
+  caps at the lender's line limit, and counts in debt-to-income.
+- A flat vacancy setting was ignored when rents follow turnover.
 - Off-market deals took the off-market discount after any outreach at all.
-  Deal credits are now pooled per channel.
-- 1031 replacements were priced from the wrong archetype with hard-coded
-  rents.
+- 1031 replacements were priced from the wrong archetype.

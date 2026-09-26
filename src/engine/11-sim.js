@@ -645,7 +645,8 @@
         }
       }
 
-      /* 7. idle cash earns */
+      /* 7. idle cash earns; a negative balance (bills on credit) costs card interest */
+      if (S.cash < 0) S.cash -= -S.cash * 0.24 / 12;
       var v = vehicle(t);
       var parked = Math.max(0, S.cash - cfg.cash.operatingFloor);
       var ret = parked * v.r + S.reserve * (U.monthlyFactor(cfg.cash.mmYield) - 1);
@@ -809,7 +810,10 @@
             milestones.push({ t: t, kind: 'forcedSale', text: 'Forced sale: ' + victim.nickname });
           }
         }
-        if (S.cash < -0.5) milestone(t, 'shortfall', 'Cash went negative — the plan breaks here');
+        if (S.cash < -0.5) {
+          if (S.props.length) milestone(t, 'shortfall', 'Cash went negative — the plan breaks here');
+          else milestone(t, 'personalShortfall', 'Savings ran out before the first purchase — bills go on credit until they recover');
+        }
         value = U.sum(S.props, function (p) { return OPS.value(env, p, t); });
         debt = U.sum(S.props, function (p) { return p.loan.balance; });
         held = value - debt + S.cash + S.reserve - S.heloc.balance + homeEq;

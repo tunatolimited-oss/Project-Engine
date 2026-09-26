@@ -2,6 +2,15 @@
 
 **Companion file:** `property-data.json` (machine-readable, same data)
 
+> **Schema version 2 (26 September 2026).** Values are unchanged from version 1. Version 2 adds structure the rebuilt engine reads:
+> `status` (sold comps vs active listings), `collected` and `availableUntil` (listings expire six months after collection),
+> `unitBedrooms`, `leaseEnds` and `vacantUnits` per unit, `ownerPaysHeat` and `heatShare`, `rubsInPlace` and `rubsRecoveryPct`,
+> `otherIncomeIsLaundry`, `condition`, `specialAssessmentsAnnual`, `taxYear`, and a `prov` object flagging each field as stated,
+> derived or estimated. Archetypes are now low/mid/high anchors taken from the comps (price per unit, in-place rent as a share of
+> survey rent, owner utilities, insurance, year built, who pays heat) instead of one average. `marketObservations` holds survey rents
+> by bedroom, the Fargo Housing Authority 2026 payment standards, a placeholder utility-allowance schedule, vacancy surveys, rates,
+> insurance and appreciation observations. The narrative below is the original companion text and still describes the data itself.
+
 ---
 
 ## Where this data came from — read this first
