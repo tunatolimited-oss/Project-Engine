@@ -46,6 +46,9 @@
 
   /* cost entered in today's dollars (plan start) → dollars in month t */
   function costNow(env, t) { return env.M.expenseIndex(t) / env.M.expenseIndex(env.start); }
+  /* Turnover is drawn tenant by tenant only on a simulated path with turnover
+     uncertainty switched on; otherwise it is blended at its expected value. */
+  function drawT(env) { return !!(env.rng && env.cfg.mc.sample.turnover); }
 
   /* ------------------------------------------------------ market for a unit */
   function marketRef(env, u, t) { return u.base * env.M.rentIndex(t); }             // refreshed / survey level
@@ -242,23 +245,25 @@
       if (rentMethod === 'ramp' && u.rampLeft > 0) { u.rent += u.rampStep; u.rampLeft--; }
 
       /* ---- lease events ---- */
-      if (env.rng && !u.occupied && u.vacantUntil != null && t >= u.vacantUntil) moveIn(env, p, u, t, r);
-      if (u.leaseEnd <= t && (u.occupied || !env.rng)) {
+      if (drawT(env) && !u.occupied && u.vacantUntil != null && t >= u.vacantUntil) moveIn(env, p, u, t, r);
+      if (u.leaseEnd <= t && (u.occupied || !drawT(env))) {
         if (useTurnover) leaseEnd(env, p, u, t, r);
         else { renewSimple(env, p, u, t); u.leaseEnd = t + O.turnover.leaseMonths; }
       }
 
       /* ---- rent collected ---- */
-      var sched = u.rent;
+      var sched = (drawT(env) && !u.occupied) ? achievable(env, p, u, t) : u.rent;   // an empty unit still has a rent it is losing
       r.gpr += sched;
       var got;
-      if (env.rng) got = u.occupied ? sched * (1 - creditLoss * (u.hcv ? 0.5 : 1)) : 0;
-      else {
-        var vf = vacOn ? (useTurnover ? u.vacFrac : O.vacancy.flatPct) : 0;
+      var flatVac = vacOn && O.vacancy.method === 'flat';
+      if (drawT(env)) {
+        got = u.occupied ? sched * (1 - creditLoss * (u.hcv ? 0.5 : 1)) : 0;
+        if (flatVac) got = sched * (1 - O.vacancy.flatPct) * (1 - creditLoss);   // flat mode re-lets at once
+      } else {
+        var vf = !vacOn ? 0 : (flatVac || !useTurnover ? O.vacancy.flatPct : u.vacFrac);
         var cl = creditLoss * (1 - u.hcv) + (ST.hcv.enabled ? ST.hcv.creditLoss : creditLoss) * u.hcv;
         got = sched * (1 - vf) * (1 - cl);
       }
-      if (env.rng && vacOn && O.vacancy.method === 'flat') got = sched * (1 - O.vacancy.flatPct) * (1 - creditLoss);
       got *= (1 - mktVac);
       r.collected += got;
       r.vacancyLoss += sched - got;
@@ -266,12 +271,20 @@
       r.hcvUnits += u.hcv;
       if (u.rent >= 0.97 * achievable(env, p, u, t)) r.unitsAtMarket += 1;
 
-      /* ---- evictions (simulated paths only) ---- */
-      if (env.rng && cfg.mc.sample.evictions && u.occupied &&
-          U.keyed(env.seed, 'evict', p.seq, i, t) < (cfg.mc.evictionRate || 0) / 12) {
-        u.occupied = false; u.vacantUntil = t + 3; u.rent = 0;
-        r.turnCost += (cfg.mc.evictionCost || 0) * cn;
-        r.events.push({ type: 'eviction', text: p.nickname + ': eviction — unit empty ~3 months' });
+      /* ---- evictions: drawn on a simulated path, expected in the base run ---- */
+      var evRate = vacOn ? O.vacancy.evictionRate : 0;
+      if (evRate > 0) {
+        if (drawT(env) && cfg.mc.sample.evictions) {
+          if (u.occupied && U.keyed(env.seed, 'evict', p.seq, i, t) < evRate / 12) {
+            u.occupied = false; u.vacantUntil = t + 3; u.rent = 0;
+            r.turnCost += O.vacancy.evictionCost * cn;
+            r.events.push({ type: 'eviction', text: p.nickname + ': eviction — unit empty ~3 months' });
+          }
+        } else {
+          var evLoss = got * evRate / 4;                     // three empty months per eviction
+          got -= evLoss; r.collected -= evLoss; r.vacancyLoss += evLoss;
+          r.turnCost += O.vacancy.evictionCost * cn * evRate / 12;
+        }
       }
     }
 
@@ -325,6 +338,13 @@
         continue;
       }
       var cost = c.cost * (M.expenseIndex(t) / M.expenseIndex(FPE.data.dataMonth));
+      if (env.cashRoom != null && cost > env.cashRoom && (c.deferred || 0) < O.capex.deferMonths) {
+        c.deferred = (c.deferred || 0) + 1; c.dueAt = t + 1;           // wait a month for the cash
+        if (c.deferred === 1) r.events.push({ type: 'defer', text: p.nickname + ': ' + c.name + ' is due but cash is tight — put off' });
+        continue;
+      }
+      if (env.cashRoom != null) env.cashRoom -= cost;
+      c.deferred = 0;
       r.capital += cost;
       r.capitalItems.push({ name: c.name, amount: cost, depreciable: true });
       c.dueAt = t + c.life;
@@ -372,10 +392,11 @@
     var pHcv = ST.hcv.enabled ? ST.hcv.moveOut : pStd;
     var pLeave = u.hcv * pHcv + (1 - u.hcv) * pStd;
 
-    if (env.rng) {
+    if (drawT(env)) {
       if (U.keyed(env.seed, 'turn', p.seq, u.i, t) < pLeave) {
         u.occupied = false;
         vacate(env, p, u, t, r, 1);
+        if (O.vacancy.enabled && O.vacancy.method === 'flat') moveIn(env, p, u, t, r);   // downtime lives in the flat rate
       } else {
         u.rent = renewal;
         u.leaseEnd = leaseEndAfter(env, t);
@@ -400,8 +421,14 @@
     var refreshNow = O.refresh.policy === 'onTurnover' && O.rentMethod !== 'none' ? (1 - u.refreshed) : 0;
     r.turnovers += w;
     r.turnCost += w * O.turnover.turnCost * cn;
+    if (refreshNow > 0 && O.refresh.deferWhenTight && env.cashRoom != null &&
+        env.cashRoom < w * refreshNow * O.refresh.costPerUnit * cn) {
+      refreshNow = 0;                                     // re-let as-is; the next turnover can refresh
+      r.deferred = (r.deferred || 0) + w;
+    }
     if (refreshNow > 0) {
       var rc = w * refreshNow * O.refresh.costPerUnit * cn;
+      if (env.cashRoom != null) env.cashRoom -= rc;
       r.capital += rc;
       r.capitalItems.push({ name: 'Unit refresh', amount: rc, depreciable: true, refresh: true });
       r.refreshes += w * refreshNow;
@@ -420,9 +447,12 @@
     var down = O.turnover.downtimeMonths * seasonFactor(env, t) + (refreshNow > 0 ? O.refresh.extraDowntime : 0) +
                hcvShare * (ST.hcv.enabled ? ST.hcv.inspectionDelay : 0);
     if (env.managed) r.leasing += w * cfg.ops.management.leasingPct * newRent;
-    if (env.rng) {
-      var jitter = 0.5 + U.keyed(env.seed, 'down', p.seq, u.i, t) * 1.5;
-      u.vacantUntil = t + Math.max(1, Math.round(down * jitter));
+    if (drawT(env)) {
+      /* empty time varies ±50% around the expected downtime (mean unchanged),
+         rounded up or down at random so short downtimes are not inflated */
+      var x = down * (0.5 + U.keyed(env.seed, 'down', p.seq, u.i, t));
+      var k = Math.floor(x) + (U.keyed(env.seed, 'downr', p.seq, u.i, t) < x - Math.floor(x) ? 1 : 0);
+      u.vacantUntil = t + Math.max(1, k);
       u.pendingRent = null;                               // decided at move-in, at that month's market
       u.pendingRefreshed = refreshNow > 0 ? 1 : u.refreshed;
       u.pendingHcv = hcvShare > 0 && U.keyed(env.seed, 'hcv', p.seq, u.i, t) < hcvShare ? 1 : 0;
@@ -442,7 +472,7 @@
 
   /* Owner moves out, or a unit comes back from another mode. */
   function relet(env, p, u, t, r, fromOwner) {
-    if (env.rng) { vacate(env, p, u, t, r, 1); return; }
+    if (drawT(env)) { vacate(env, p, u, t, r, 1); return; }
     var c = vacate(env, p, u, t, r, 1);
     u.rent = c.newRent; u.refreshed = c.refreshedAfter; u.hcv = c.hcvShare;
     var term = leaseEndAfter(env, t) - t;
@@ -472,6 +502,7 @@
     r.capitalItems.push({ name: 'Heat conversion', amount: cost, depreciable: true });
     p.heatTenantCostPerUnit = p.utilities * p.heatShare / p.units;
     p.heatConverted = true;
+    r.projectHours = (r.projectHours || 0) + cfg.life.hours.heatProjectPerUnit * p.units;
     if (p.rubs.active) p.rubs.recoveryMonthly *= (1 - p.heatShare);
     r.events.push({ type: 'heat', text: p.nickname + ': tenants moved onto their own heat — owner utilities fall by ' +
       U.fmtDollars(p.utilities * p.heatShare) + '/mo for ' + U.fmtMoney(cost) });
@@ -483,7 +514,7 @@
     return {
       units: p.units, value: value(env, p, t),
       rents: p.unitsArr.map(function (u) {
-        return { lease: u.owner ? 0 : u.rent, marketAsIs: marketAsIs(env, u, t), occupied: !u.owner && (u.occupied || !env.rng), owner: u.owner };
+        return { lease: u.owner ? 0 : u.rent, marketAsIs: marketAsIs(env, u, t), occupied: !u.owner && (u.occupied || !drawT(env)), owner: u.owner };
       }),
       taxMonthly: p.taxBill / 12 + p.specials / 12, insMonthly: p.insurance / 12, hoaMonthly: p.hoa,
       utilitiesMonthly: p.utilities * (p.heatConverted ? 1 - p.heatShare : 1), maintenancePct: p.maintPct,

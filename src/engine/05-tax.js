@@ -19,7 +19,16 @@
   var U = FPE.util, T = FPE.data.TAX;
 
   /* ------------------------------------------------ tables for a year */
+  var tableCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function tables(cfg, year) {
+    var key = year + '|' + cfg.plan.filingStatus + '|' + (cfg.tax && cfg.tax.indexBrackets) + '|' + cfg.market.cpi;
+    var byCfg = tableCache && tableCache.get(cfg);
+    if (byCfg && byCfg[key]) return byCfg[key];
+    var tb = buildTables(cfg, year);
+    if (tableCache) { if (!byCfg) { byCfg = {}; tableCache.set(cfg, byCfg); } byCfg[key] = tb; }
+    return tb;
+  }
+  function buildTables(cfg, year) {
     var fs = cfg.plan.filingStatus === 'mfj' ? 'mfj' : 'single';
     var f = (cfg.tax && cfg.tax.indexBrackets !== false)
       ? Math.pow(1 + cfg.market.cpi, Math.max(0, year - T.baseYear)) : 1;

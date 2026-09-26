@@ -34,7 +34,7 @@
   function init() {
     function z() { var o = {}; TYPES.forEach(function (k) { o[k] = 0; }); return o; }
     return { pool: { mls: z(), offMarket: z() }, seller: { mls: z(), offMarket: z() }, expires: { mls: {}, offMarket: {} },
-             spend: 0, touches: 0, lastClose: -999, boughtIds: {} };
+             ready: {}, spend: 0, touches: 0, lastClose: -999, boughtIds: {} };
   }
 
   /* ------------------------------------------------------ monthly accrual */
@@ -74,9 +74,11 @@
             SO.pool[ch][k] = Math.min(2, SO.pool[ch][k] + n); SO.expires[ch][k] = t + 2;
             if (U.keyed(env.seed, 'sellerdeal', ch, k, t) < addSeller[ch][k] / a) SO.seller[ch][k] = 1;
           } else if (SO.expires[ch][k] != null && t > SO.expires[ch][k]) { SO.pool[ch][k] = 0; SO.seller[ch][k] = 0; }
-        } else {
-          /* expected supply, capped at one: a deal you cannot use this month
-             is gone, it does not wait for you */
+        } else if (SO.ready[k]) {
+          /* expected supply, counted only while you could act on it: a deal
+             that lists while you cannot afford it goes to someone else. So
+             once you are ready, the expected wait for a type is one over its
+             arrival rate — as it is on a simulated path. */
           SO.pool[ch][k] = Math.min(1, SO.pool[ch][k] + a);
           SO.seller[ch][k] = Math.min(1, SO.seller[ch][k] + addSeller[ch][k]);
         }

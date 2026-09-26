@@ -76,35 +76,46 @@ var FPE = (typeof FPE !== 'undefined' && FPE) ? FPE : {};
   /* --------------------------------------------------------------- hashing
      FNV-1a with a final avalanche. Used to derive independent, reproducible
      random streams from keys — never to decide anything in the base run.   */
-  function hash32() {
+  var STR_HASH = Object.create(null);
+  function hashStr(s) {
+    var c = STR_HASH[s];
+    if (c !== undefined) return c;
     var h = 2166136261;
-    for (var a = 0; a < arguments.length; a++) {
-      var s = String(arguments[a]);
-      for (var i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
-      }
-      h ^= 0x9e; h = Math.imul(h, 16777619) >>> 0;      // separator between keys
-    }
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (STR_HASH[s] = h >>> 0);
+  }
+  function mix(h, v) {
+    if (typeof v !== 'number' || !((v | 0) === v || (v >>> 0) === v)) v = hashStr(String(v));
+    h ^= v & 0xff; h = Math.imul(h, 16777619);
+    h ^= (v >>> 8) & 0xff; h = Math.imul(h, 16777619);
+    h ^= (v >>> 16) & 0xff; h = Math.imul(h, 16777619);
+    h ^= (v >>> 24) & 0xff; h = Math.imul(h, 16777619);
+    h ^= 0x9e; return Math.imul(h, 16777619);           // separator between keys
+  }
+  function finish(h) {
+    h >>>= 0;
     h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
     h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
     h ^= h >>> 16;
     return h >>> 0;
   }
+  function hash32() {
+    var h = 2166136261;
+    for (var a = 0; a < arguments.length; a++) h = mix(h, arguments[a]);
+    return finish(h);
+  }
 
   /* -------------------------------------------------------- seeded random
      mulberry32 — small, fast, good enough for Monte Carlo. The base run never
      calls it; only the uncertainty layer does, always from an explicit seed. */
-  function Rng(seed) {
-    var a = (seed >>> 0) || 1;
-    this.next = function () {
-      a = (a + 0x6D2B79F5) >>> 0;
-      var t = a;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
+  function mulberry(a) {
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
+  function Rng(seed) { this.a = (seed >>> 0) || 1; }
+  Rng.prototype.next = function () { this.a = (this.a + 0x6D2B79F5) >>> 0; return mulberry(this.a); };
   Rng.prototype.uniform = function (lo, hi) { return lo + (hi - lo) * this.next(); };
   Rng.prototype.normal = function (mean, sd) {
     var u = 0, v = 0;
@@ -127,12 +138,16 @@ var FPE = (typeof FPE !== 'undefined' && FPE) ? FPE : {};
   };
   /* A uniform draw that depends only on the keys — the same keys give the same
      number in every plan. That is what makes two plans face the same luck
-     (common random numbers), so their difference is the plan, not the dice. */
-  function keyed() {
-    var h = hash32.apply(null, arguments);
-    var r = new Rng(h);
-    r.next();                                   // discard the first, weakest draw
-    return r.next();
+     (common random numbers), so their difference is the plan, not the dice.
+     (The second mulberry32 draw from the key's hash; the first is weakest.) */
+  function keyed(a, b, c, d, e, f) {
+    var n = arguments.length, h = mix(2166136261, a);
+    if (n > 1) h = mix(h, b);
+    if (n > 2) h = mix(h, c);
+    if (n > 3) h = mix(h, d);
+    if (n > 4) h = mix(h, e);
+    if (n > 5) h = mix(h, f);
+    return mulberry((finish(h) + 2 * 0x6D2B79F5) >>> 0);
   }
 
   /* ----------------------------------------------------------- statistics */

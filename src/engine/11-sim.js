@@ -30,9 +30,11 @@
   function runSimulation(cfg, opts) {
     opts = opts || {};
     var rng = opts.rng || null, seed = opts.seed || 0, lean = !!opts.lean;
+    var series = null;             // compact per-month arrays for the uncertainty layer's bands
     var M = FPE.market.create(cfg, { rng: rng });
     var start = M.start, months = Math.round(cfg.plan.horizonYears * 12), end = start + months;
     var env = { cfg: cfg, M: M, rng: rng, seed: seed, start: start, events: [], milestones: [], managed: false };
+    if (opts.series) series = { income: new Float64Array(months), nw: new Float64Array(months), cash: new Float64Array(months), units: new Float64Array(months) };
     var S = {
       cash: cfg.plan.startingCash, reserve: 0, fund: 0, heloc: { balance: 0, limit: 0, interest: 0, drawn: 0 },
       props: [], seq: 0, carry: { passive: 0, nol: 0 }, fhaActive: false, exchanges: 0, lastExchange: -999,
@@ -45,6 +47,7 @@
     var incomeHist = [], hoursHist = [], cfHist = [];
     var ya = newYear();
     var lastNeed = null;             // cash the most recent candidate needed — the paydown war chest
+    var lastFull = null;             // the last fully underwritten "not yet" answer
 
     function newYear() {
       return { wages: 0, w2Hours: 0, passiveNet: 0, nonPassiveNet: 0, investOrdinary: 0, investTbill: 0, investLtcg: 0,
@@ -58,6 +61,11 @@
       return E.months * monthlyCosts(t);
     }
     function monthlyCosts(t) { return LIFE.livingCost(cfg, M, t) + LIFE.housingNeed(cfg, M, t, LF); }
+    /* the cash-buffer breaker's cushion for the portfolio you own now */
+    function cushion(t) {
+      var B = cfg.life.breakers.cashBuffer;
+      return B.enabled ? B.months * monthlyCosts(t) + (B.perUnit || 0) * OPS.costNow(env, t) * U.sum(S.props, function (p) { return p.units; }) : 0;
+    }
     function usable() { return S.cash - S.fund; }
     function eligibleLiquid(cashAfter, t) {
       var floor = cfg.cash.operatingFloor, v = vehicle(t);
@@ -276,12 +284,37 @@
       var cands = SRC.candidates(env, SO, t);
       if (!cands.length) return { blocked: 'noDeals' };
       var hh = houseHackIntent(t);
+      /* cheap test first: if cash cannot reach even the smallest down payment
+         and closing costs on offer, skip full underwriting this month and
+         carry forward the last full answer */
+      var lowDown = hh ? Math.min(cfg.lending.fha.downPct, cfg.lending.convOO.downPct)
+                       : Math.min(cfg.lending.dscr.downPct, cfg.lending.convInv.downPct, cfg.lending.commercial.downPct,
+                                  cfg.strategies.sellerFinance.enabled ? cfg.strategies.sellerFinance.downPct : 1,
+                                  cfg.strategies.assumption.enabled ? 0 : 1);
+      var cheapest = Math.min.apply(null, cands.map(function (c) { return c.price; }));
+      var floorCash = cheapest * (lowDown + Math.min(cfg.market.closingCostPct, cfg.strategies.sellerFinance.closingCostPct || 1));
+      var helocRoom = (ST.heloc.enabled && !STR.helocFrozen(env, t)) ? Math.max(0, S.heloc.limit - S.heloc.balance) : 0;
+      if (usable() + helocRoom < floorCash && lastFull && lastFull.t > t - 12) {
+        return { blocked: lastFull.res.blocked, detail: lastFull.res.detail, carried: true };
+      }
       var bk = book(t, lm.jobless);
       var ef = efRequired(t);
-      var buffer = cfg.life.breakers.cashBuffer.enabled ? cfg.life.breakers.cashBuffer.months * monthlyCosts(t) : 0;
+      var ownedUnits = U.sum(S.props, function (p) { return p.units; });
+      function bufferFor(units) {
+        var B = cfg.life.breakers.cashBuffer;
+        return B.enabled ? B.months * monthlyCosts(t) + (B.perUnit || 0) * OPS.costNow(env, t) * (ownedUnits + units) : 0;
+      }
+      var buffer = bufferFor(0);
       var helocAvail = (ST.heloc.enabled && !STR.helocFrozen(env, t)) ? Math.max(0, S.heloc.limit - S.heloc.balance) : 0;
       var cn = OPS.costNow(env, t);
       var options = [], nearest = null;
+      var G = ST.guardrails.enabled ? {
+        noi: U.sum(S.props, function (p) { return p.lastNOI || 0; }),
+        ds: U.sum(S.props, function (p) { return LEND.debtService(p.loan); }),
+        cf: U.sum(S.props, function (p) { return p.lastCF || 0; }),
+        val: U.sum(S.props, function (p) { return OPS.value(env, p, t); }),
+        debt: U.sum(S.props, function (p) { return p.loan.balance; })
+      } : null;
 
       cands.forEach(function (cand) {
         var ownerOcc = hh && cand.units >= 2 && cand.units <= 4;
@@ -299,7 +332,8 @@
           var st = stabilized(cand, t, uw);
           var fails = uw.fails.slice();
           var cashAfter = usable() - uw.cashToClose;
-          var shortfall = Math.max(0, ef + buffer - cashAfter, uw.reservesRequired - eligibleLiquid(cashAfter, t));
+          var bufC = bufferFor(cand.units);
+          var shortfall = Math.max(0, ef + bufC - cashAfter, uw.reservesRequired - eligibleLiquid(cashAfter, t));
           var draw = 0;
           if (shortfall > 0) {
             if (fails.length === 0 && helocAvail >= shortfall && shortfall >= ST.heloc.minDraw) draw = shortfall;
@@ -311,18 +345,18 @@
             if (st.cf / cand.units < ST.hurdle.minCashFlowPerUnit) fails.push({ code: 'hurdleCF', value: st.cf / cand.units });
           }
           /* portfolio guardrails, after this purchase */
-          if (ST.guardrails.enabled) {
-            var noiAll = U.sum(S.props, function (p) { return p.lastNOI || 0; }) + st.noi;
-            var dsAll = U.sum(S.props, function (p) { return LEND.debtService(p.loan); }) + uw.payment + uw.miMonthly;
-            var cfAll = U.sum(S.props, function (p) { return p.lastCF || 0; }) + st.dayOneCF;
-            var valAll = U.sum(S.props, function (p) { return OPS.value(env, p, t); }) + (cand.marketValue || cand.price);
-            var debtAll = U.sum(S.props, function (p) { return p.loan.balance; }) + uw.financed + draw;
+          if (G) {
+            var noiAll = G.noi + st.noi;
+            var dsAll = G.ds + uw.payment + uw.miMonthly;
+            var cfAll = G.cf + st.dayOneCF;
+            var valAll = G.val + (cand.marketValue || cand.price);
+            var debtAll = G.debt + uw.financed + draw;
             if (cfAll < ST.guardrails.minCashFlow) fails.push({ code: 'guardCashFlow', value: cfAll });
             if (dsAll > 0 && noiAll / dsAll < ST.guardrails.minCoverage) fails.push({ code: 'guardCoverage', value: noiAll / dsAll });
             if (valAll > 0 && debtAll / valAll > ST.guardrails.maxLtv) fails.push({ code: 'guardLtv', value: debtAll / valAll });
           }
           var opt = { cand: cand, product: product, uw: uw, st: st, fails: fails, draw: draw, ownerOcc: isOO,
-                      need: uw.cashToClose + Math.max(ef + buffer, uw.reservesRequired) };
+                      need: uw.cashToClose + Math.max(ef + bufC, uw.reservesRequired) };
           options.push(opt);
           if (fails.length && (!nearest || opt.need < nearest.need)) nearest = opt;
         });
@@ -331,7 +365,9 @@
       if (hh && ok.some(function (o) { return o.ownerOcc; })) ok = ok.filter(function (o) { return o.ownerOcc; });
       if (!ok.length) {
         lastNeed = nearest ? nearest.need : null;
-        return { blocked: nearest ? nearest.fails[0].code : 'noOption', detail: nearest };
+        var res0 = { blocked: nearest ? nearest.fails[0].code : 'noOption', detail: nearest };
+        lastFull = { t: t, res: res0 };
+        return res0;
       }
       /* best financing per candidate, then best candidate */
       var byCand = {};
@@ -488,8 +524,9 @@
       var agg = { gpr: 0, collected: 0, vacancy: 0, other: 0, opex: 0, noi: 0, interest: 0, principal: 0, mi: 0, ds: 0,
                   capital: 0, reserveIn: 0, cf: 0, value: 0, debt: 0, units: 0, turnovers: 0, refreshes: 0, hcv: 0,
                   atMarket: 0, rented: 0, prc: 0, taxParts: { tax: 0, specials: 0, insurance: 0, hoa: 0, utilities: 0, maintenance: 0, management: 0, leasing: 0, turn: 0, modeOpex: 0 },
-                  selfHours: 0, strNet: 0 };
+                  selfHours: 0, strNet: 0, ownerCF: 0, rentalProps: 0 };
       var props = S.props.slice();
+      env.cashRoom = usable() - efRequired(t) + S.reserve;     // what can be spent on things that can wait
       for (var pi = 0; pi < props.length; pi++) {
         var p = props[pi];
         if (S.props.indexOf(p) < 0) continue;
@@ -501,6 +538,7 @@
         var ds = ls.pi + ls.mi;
         var cf = r.noi - ds;
         p.lastCF = cf; p.lastNOI = r.noi; p.cumCashFlow += cf;
+        p.cf12 = p.cf12 == null ? cf : p.cf12 + (cf - p.cf12) / 12;     // smoothed, for choosing what to sell
         /* taxable income, split by character */
         var personal = (p.ownerOccupied && cfg.tax.personalUse) ? 1 / p.units : 0;
         var deductible = (r.opexTotal - (cfg.tax.deMinimisTurnCosts ? 0 : r.opex.turn)) * (1 - personal) + (ls.interest + ls.mi) * (1 - personal) + dp.dep + dp.points;
@@ -517,7 +555,7 @@
         var managedHere = env.managed;
         var H = cfg.life.hours, units = p.units - (p.ownerOccupied ? 1 : 0);
         var hrs = managedHere ? units * H.managedPerUnit / 12 : units * H.selfManagePerUnit / 12 + r.turnovers * H.perTurnover;
-        hrs += r.refreshes * H.perRefresh + r.hcvUnits * H.hcvPerUnit / 12;
+        hrs += r.refreshes * H.perRefresh + r.hcvUnits * H.hcvPerUnit / 12 + (r.projectHours || 0);
         p.unitsArr.forEach(function (u) {
           if (u.mode === 'mtr') hrs += H.mtrPerUnit / 12 * (managedHere ? 0.3 : 1);
           if (u.mode === 'str') hrs += H.strPerUnit / 12 * (managedHere ? 0.2 : 1);
@@ -536,6 +574,7 @@
         agg.gpr += r.gpr; agg.collected += r.collected; agg.vacancy += r.vacancyLoss; agg.other += r.other;
         agg.opex += r.opexTotal; agg.noi += r.noi; agg.interest += ls.interest; agg.principal += ls.principal;
         agg.mi += ls.mi; agg.ds += ds; agg.capital += r.capital; agg.cf += cf; agg.turnovers += r.turnovers;
+        if (p.ownerOccupied) agg.ownerCF += cf; else agg.rentalProps++;
         agg.refreshes += r.refreshes; agg.hcv += r.hcvUnits; agg.atMarket += r.unitsAtMarket; agg.rented += r.rentedUnits;
         agg.prc += r.prc;
         for (var key in agg.taxParts) agg.taxParts[key] += r.opex[key] || 0;
@@ -580,7 +619,7 @@
           case 'properties': fire = S.props.length >= MG.properties; break;
           case 'cashFlow': fire = agg.cf >= MG.cashFlow; break;
           case 'date': fire = t >= U.parseMonth(MG.date); break;
-          default: fire = trailing(hoursHist, 3) > LIFE.hourBudgetMonthly(cfg, LF);
+          default: fire = hoursHist.length >= 6 && trailing(hoursHist, 12) > LIFE.hourBudgetMonthly(cfg, LF);   // a sustained overload, not one busy month
         }
         if (fire) {
           env.managed = true;
@@ -617,9 +656,10 @@
         ya.reHours += cfg.life.hours.licenseAgentYear / 12;
       }
 
-      /* 10. breakers — cash flow counts the rent a house-hack saves you */
+      /* 10. breakers — the rentals' own cash flow; the building you live in
+             is your housing, and its cost already shows in your contributions */
       var housingCredit = LIFE.housingCredit(cfg, M, t, LF);
-      if (S.props.length) cfHist.push(agg.cf - helocInt + housingCredit);
+      if (agg.rentalProps) cfHist.push(agg.cf - agg.ownerCF - helocInt);
       var nb = cfg.life.breakers.negativeCF.months;
       LF.breakers.negCF = cfg.life.breakers.negativeCF.enabled && cfHist.length >= nb && trailing(cfHist, nb) < 0;
 
@@ -646,6 +686,23 @@
         var res = tryAcquire(t, lm);
         if (res.choice) { got = purchase(res.choice, t); lastNeed = null; }
         else blocked = res;
+      }
+
+      /* 13b. which building types you could act on next month (base run) */
+      if (!(rng && cfg.mc.sample.deals) && cfg.sourcing.model === 'channels') {
+        var hhNext = houseHackIntent(t);
+        var downNext = hhNext ? Math.min(cfg.lending.fha.downPct, cfg.lending.convOO.downPct)
+                              : Math.min(cfg.lending.dscr.downPct, cfg.lending.convInv.downPct, cfg.lending.commercial.downPct);
+        var roomNext = usable() + ((cfg.strategies.heloc.enabled && !STR.helocFrozen(env, t)) ? Math.max(0, S.heloc.limit - S.heloc.balance) : 0);
+        SRC.TYPES.forEach(function (k) {
+          var units = k === '8' ? 8 : parseInt(k, 10);
+          if (!SRC.allowed(cfg, units) || (k === '8' && !cfg.sourcing.archetype58)) { SO.ready[k] = false; return; }
+          var ac = SRC.fromArchetype(env, k, t, 'mls', cfg.sourcing.archetypeQuality);
+          var B = cfg.life.breakers.cashBuffer;
+          var needR = ac.price * (downNext + cfg.market.closingCostPct) + efRequired(t) + cushion(t) +
+                      (B.enabled ? (B.perUnit || 0) * OPS.costNow(env, t) * units : 0);
+          SO.ready[k] = roomNext >= needR;
+        });
       }
 
       /* 14. December tax */
@@ -683,13 +740,12 @@
       /* 15. repay the HELOC from this month's surplus, then paydown / best use */
       if (S.heloc.balance > 0.01) {
         var surplus = Math.max(0, lm.contribution + agg.cf - helocInt);
-        var roomH = usable() - efRequired(t) - (cfg.life.breakers.cashBuffer.enabled ? cfg.life.breakers.cashBuffer.months * monthlyCosts(t) : 0);
+        var roomH = usable() - efRequired(t) - cushion(t);
         var rp = Math.max(0, Math.min(S.heloc.balance, surplus * cfg.strategies.heloc.repayShare, roomH));
         if (rp > 0) { S.heloc.balance -= rp; S.cash -= rp; }
       }
       if (!got) {
-        var warChest = efRequired(t) + (lastNeed != null ? lastNeed : 0) +
-                       (cfg.life.breakers.cashBuffer.enabled ? cfg.life.breakers.cashBuffer.months * monthlyCosts(t) : 0);
+        var warChest = efRequired(t) + (lastNeed != null ? lastNeed : 0) + cushion(t);
         if (PD.enabled && PD.allocation !== 'pauseBuying' && S.props.length >= PD.startAfterProperties && S.freeClear < PD.stopAfterFreeClear) {
           var spare = usable() - warChest;
           if (PD.allocation === 'split') spare = Math.min(spare, Math.max(0, lm.contribution + agg.cf) * PD.splitPct);
@@ -716,10 +772,40 @@
       var debt = U.sum(S.props, function (p) { return p.loan.balance; });
       var homeEq = S.home ? S.home.value - S.home.loan.balance : 0;
       var held = value - debt + S.cash + S.reserve - S.heloc.balance + homeEq;
-      if (S.cash < 0) milestone(t, 'shortfall', 'Cash went negative — the plan breaks here');
+      /* shortfall: credit line, then the weakest building, then failure */
+      if (S.cash < -0.5) {
+        if (cfg.life.shortfall.policy === 'sell') {
+          var needH = -S.cash;
+          if (cfg.strategies.heloc.enabled && !STR.helocFrozen(env, t) && S.heloc.limit - S.heloc.balance >= needH) {
+            S.heloc.balance += needH; S.heloc.drawn += needH; S.cash += needH;
+            addEvent(t, 'heloc', 'Cash ran short — drew ' + U.fmtMoney(needH) + ' on the HELOC');
+          }
+          var guardS = 0;
+          while (S.cash < -0.5 && S.props.length && guardS++ < 20) {
+            var pool = S.props.filter(function (q) { return !q.ownerOccupied; });
+            if (!pool.length) pool = S.props.slice();
+            pool.sort(function (a, b) { return (a.cf12 || 0) - (b.cf12 || 0); });
+            var victim = pool[0];
+            var sale = sellProperty(victim, t, 'shortfall', cfg.life.shortfall.discount);
+            S.forcedSales++;
+            addEvent(t, 'forcedSale', 'Cash ran out — sold ' + victim.nickname + ' at a ' + U.fmtPct(cfg.life.shortfall.discount, 0) +
+              ' discount, netting ' + U.fmtMoney(sale.net) + ' after tax');
+            milestones.push({ t: t, kind: 'forcedSale', text: 'Forced sale: ' + victim.nickname });
+          }
+        }
+        if (S.cash < -0.5) milestone(t, 'shortfall', 'Cash went negative — the plan breaks here');
+        value = U.sum(S.props, function (p) { return OPS.value(env, p, t); });
+        debt = U.sum(S.props, function (p) { return p.loan.balance; });
+        held = value - debt + S.cash + S.reserve - S.heloc.balance + homeEq;
+      }
       var real = M.cpiIndex(t);
       var costsNow = monthlyCosts(t) + (LF.stage === 'quit' ? cfg.life.career.healthInsurance * M.cpiIndex(t) : 0);
       if (trailing(incomeHist, 12) >= costsNow && S.props.length) milestone(t, 'freedom', 'After-tax portfolio income covers your living costs');
+      if (series) {
+        var si = t - start;
+        series.income[si] = trailing(incomeHist, 12) / real; series.nw[si] = held / real;
+        series.cash[si] = S.cash; series.units[si] = U.sum(S.props, function (p) { return p.units; });
+      }
       if (!lean) {
         rows.push({
           t: t, label: U.label(t), year: year, recession: !!recNow,
@@ -842,14 +928,14 @@
       return a.length ? U.sum(a) / a.length : 0;
     })();
     var cpiTarget = M.cpiIndex(Math.min(target, lastT));
-    var ruined = S.cash < -1 || milestones.some(function (m) { return m.kind === 'shortfall'; });
+    var ruined = milestones.some(function (m) { return m.kind === 'shortfall'; });
     var liq = EXIT.liquidate(env, S, lastT, (years.length ? years[years.length - 1].wages : 0), false);
     var lastRow = rows.length ? rows[rows.length - 1] : null;
     var held = U.sum(S.props, function (p) { return OPS.value(env, p, lastT) - p.loan.balance; }) + S.cash + S.reserve - S.heloc.balance +
                (S.home ? S.home.value - S.home.loan.balance : 0);
     var ms = function (k) { var m = milestones.filter(function (x) { return x.kind === k; })[0]; return m ? m.t : null; };
     return {
-      cfg: cfg, rows: rows, years: years, acquisitions: acquisitions, milestones: milestones, properties: S.props, state: S,
+      cfg: cfg, rows: rows, years: years, acquisitions: acquisitions, milestones: milestones, properties: S.props, state: S, series: series,
       summary: {
         start: start, end: lastT, target: target,
         incomeAtTarget: incomeAtTarget, incomeAtTargetReal: incomeAtTarget / cpiTarget,

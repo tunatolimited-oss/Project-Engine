@@ -64,8 +64,9 @@
     o: [[0.5, 'Median (50%)'], [0.6, '60%'], [0.7, '70%'], [0.8, '80% of futures'], [0.9, '90%'], [0.95, '95%']],
     h: 'The headline is the income this share of simulated futures meets or beats.' });
   def('plan.objective.realDollars', { l: 'Show money in today\'s dollars', g: 'plan', s: 'Objective', t: 'bool', d: true, sw: true, c: 'choice' });
-  def('plan.objective.salaryBuffer', { l: 'Cushion over living costs', g: 'plan', s: 'Objective', t: 'pct', d: 0.25, min: 0, max: 1, c: 'choice',
-    w: is('plan.objective.kind', 'replaceSalary') });
+  def('plan.objective.salaryBuffer', { l: 'Cushion on top of the pay replaced', g: 'plan', s: 'Objective', t: 'pct', d: 0.10, min: 0, max: 1, c: 'choice',
+    w: is('plan.objective.kind', 'replaceSalary'),
+    h: 'The target is your current take-home pay (after income tax and payroll tax) plus this cushion, in today\'s dollars. With no W-2 it is your living costs plus rent.' });
 
   /* ================================================================= INCOME */
   def('income.w2.enabled', { l: 'Model a W-2 job', g: 'income', t: 'bool', d: true, sw: true, lvl: 'core', c: 'choice',
@@ -144,8 +145,14 @@
   def('life.emergencyFund.months', { l: 'Emergency fund', g: 'life', s: 'Safety', t: 'num', d: 6, min: 0, max: 36, u: 'months of costs', w: yes('life.emergencyFund.enabled'), c: 'choice' });
   def('life.breakers.cashBuffer.enabled', { l: 'Pause buying when free cash runs low', g: 'life', s: 'Circuit breakers', t: 'bool', d: true, sw: true, c: 'choice', n: 'breakers' });
   def('life.breakers.cashBuffer.months', { l: 'Free cash below', g: 'life', s: 'Circuit breakers', t: 'num', d: 3, min: 0, max: 24, u: 'months of costs', w: yes('life.breakers.cashBuffer.enabled'), c: 'choice' });
+  def('life.breakers.cashBuffer.perUnit', { l: '… plus, for each unit you own', g: 'life', s: 'Circuit breakers', t: 'money', d: 1000, min: 0, max: 10000, u: '/unit',
+    w: yes('life.breakers.cashBuffer.enabled'), c: 'choice', h: 'A portfolio\'s bad months grow with its size: four turnovers and an eviction in one month is ordinary at 25 units.' });
+  def('life.shortfall.policy', { l: 'If cash would run out', g: 'life', s: 'Circuit breakers', t: 'select', d: 'sell', c: 'choice', n: 'shortfall',
+    o: [['sell', 'Draw the HELOC if there is one, otherwise sell the weakest building'], ['fail', 'Nothing — count the plan as failed']],
+    h: 'Either way the uncertainty layer reports how often it happens. A forced sale shrinks the portfolio; a failed plan scores zero.' });
+  def('life.shortfall.discount', { l: 'Price cut on a forced sale', g: 'life', s: 'Circuit breakers', t: 'pct', d: 0.05, min: 0, max: 0.3, w: is('life.shortfall.policy', 'sell'), c: 'estimate' });
   def('life.breakers.negativeCF.enabled', { l: 'Pause buying while cash flow runs negative', g: 'life', s: 'Circuit breakers', t: 'bool', d: true, sw: true, c: 'choice',
-    h: 'Portfolio cash flow averaged over the window below, counting the rent a house-hack saves you. An average, so one turnover month does not trip it and one good month does not reset it.' });
+    h: 'The rentals\' cash flow averaged over the window below. The building you live in is left out — it is your housing. An average, so one turnover month does not trip it and one good month does not reset it.' });
   def('life.breakers.negativeCF.months', { l: 'Averaged over', g: 'life', s: 'Circuit breakers', t: 'int', d: 6, min: 1, max: 24, u: 'months', w: yes('life.breakers.negativeCF.enabled'), c: 'choice' });
   def('life.breakers.jobLoss.enabled', { l: 'Hold and survive if the job stops', g: 'life', s: 'Circuit breakers', t: 'bool', d: true, sw: true, c: 'choice',
     w: yes('income.w2.enabled'), h: 'While out of work: no buying, contributions stop, reserves are defended.' });
@@ -299,6 +306,8 @@
     o: [['onTurnover', 'When a tenant leaves'], ['atPurchase', 'All units right after buying'], ['never', 'Never']] });
   def('ops.refresh.costPerUnit', { l: 'Refresh cost', g: 'ops', s: 'Refresh', t: 'money', d: 5000, u: '/unit', w: ['ops.refresh.policy', 'ne', 'never'], c: 'estimate',
     dist: { k: 'triRel', lo: -0.3, hi: 0.6 }, cat: 'costs' });
+  def('ops.refresh.deferWhenTight', { l: 'Skip the refresh when cash is tight', g: 'ops', s: 'Refresh', t: 'bool', d: true, sw: true, w: ['ops.refresh.policy', 'ne', 'never'], c: 'choice',
+    h: 'Re-let as-is instead of refreshing when the refresh would take cash below your emergency fund.' });
   def('ops.refresh.extraDowntime', { l: 'Extra empty time for a refresh', g: 'ops', s: 'Refresh', t: 'num', d: 0.5, step: 0.25, u: 'months', w: ['ops.refresh.policy', 'ne', 'never'], c: 'estimate' });
   def('ops.vacancy.enabled', { l: 'Count vacancy and bad debt', g: 'ops', s: 'Vacancy', t: 'bool', d: true, sw: true, c: 'choice', n: 'vacancy' });
   var vacOn = yes('ops.vacancy.enabled');
@@ -307,6 +316,10 @@
   def('ops.vacancy.flatPct', { l: 'Flat vacancy', g: 'ops', s: 'Vacancy', t: 'pct', d: 0.07, w: all(vacOn, is('ops.vacancy.method', 'flat')), c: 'estimate', n: 'vacancy',
     dist: { k: 'triAdd', lo: -0.03, hi: 0.04 }, cat: 'turnover' });
   def('ops.vacancy.creditLoss', { l: 'Bad debt and concessions', g: 'ops', s: 'Vacancy', t: 'pct', d: 0.01, w: vacOn, c: 'estimate', dist: { k: 'triAdd', lo: -0.005, hi: 0.015 }, cat: 'turnover' });
+  def('ops.vacancy.evictionRate', { l: 'Evictions per unit per year', g: 'ops', s: 'Vacancy', t: 'pct', d: 0.015, step: 0.005, w: vacOn, c: 'estimate', n: 'evictions',
+    dist: { k: 'triRel', lo: -0.5, hi: 1.0 }, cat: 'turnover' });
+  def('ops.vacancy.evictionCost', { l: 'Cost of an eviction', g: 'ops', s: 'Vacancy', t: 'money', d: 4000, w: vacOn, c: 'estimate', n: 'evictions',
+    h: 'Filing, attorney, lost rent beyond the deposit, and cleanup. The unit then sits empty about three months.' });
   def('ops.vacancy.marketPremium', { l: 'Extra market vacancy (oversupply)', g: 'ops', s: 'Vacancy', t: 'pct', d: 0, w: vacOn, c: 'choice' });
   def('ops.maintenance.enabled', { l: 'Count routine maintenance', g: 'ops', s: 'Maintenance', t: 'bool', d: true, sw: true, c: 'choice', n: 'maintenance' });
   var mOn = yes('ops.maintenance.enabled');
@@ -321,6 +334,8 @@
   def('ops.capex.components', { l: 'Schedule big-ticket replacements', g: 'ops', s: 'Capital items', t: 'bool', d: true, sw: true, c: 'choice',
     h: 'Roof, furnace, water heaters, windows, siding, lot — each on its own life.' });
   def('ops.capex.lifeJitterYears', { l: 'Uncertainty in remaining life', g: 'ops', s: 'Capital items', t: 'num', d: 3, u: 'years', w: all(yes('ops.capex.components'), yes('mc.sample.capex')), c: 'estimate', lvl: 'adv' });
+  def('ops.capex.deferMonths', { l: 'Put off a failing item when cash is tight, up to', g: 'ops', s: 'Capital items', t: 'int', d: 6, min: 0, max: 24, u: 'months',
+    w: yes('ops.capex.components'), c: 'choice', h: 'A replacement that would take cash below your emergency fund waits, month by month, up to this long. 0 = never wait.' });
   def('ops.capex.reserve', { l: 'Fund a capital reserve account', g: 'ops', s: 'Capital items', t: 'bool', d: true, sw: true, c: 'choice', n: 'capexReserve' });
   def('ops.capex.reservePct', { l: 'Reserve contribution', g: 'ops', s: 'Capital items', t: 'pct', d: 0.05, u: 'of rent', w: yes('ops.capex.reserve'), c: 'choice' });
   def('ops.capex.reserveTarget', { l: 'Stop funding at', g: 'ops', s: 'Capital items', t: 'money', d: 2000, u: '/unit', w: yes('ops.capex.reserve'), c: 'choice' });
@@ -528,8 +543,6 @@
   });
   def('mc.recessionAnnualProb', { l: 'Chance a recession starts in a year', g: 'mc', s: 'Recessions', t: 'pct', d: 0.10, w: all(mcOn, yes('mc.sample.recessions')), c: 'estimate' });
   def('mc.contributionNoise', { l: 'Month-to-month swing in contributions', g: 'mc', s: 'Contributions', t: 'pct', d: 0.15, w: all(mcOn, yes('mc.sample.contributions')), c: 'yours' });
-  def('mc.evictionRate', { l: 'Evictions per unit per year', g: 'mc', s: 'Evictions', t: 'pct', d: 0.015, w: all(mcOn, yes('mc.sample.evictions')), c: 'estimate' });
-  def('mc.evictionCost', { l: 'Cost of an eviction', g: 'mc', s: 'Evictions', t: 'money', d: 4000, w: all(mcOn, yes('mc.sample.evictions')), c: 'estimate' });
 
   /* ================================================= SCHEDULED STRESS TESTS */
   def('stress.recession.enabled', { l: 'Schedule a recession', g: 'stress', s: 'Recession', t: 'bool', d: false, sw: true, c: 'choice' });

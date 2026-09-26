@@ -25,11 +25,19 @@
   }
 
   /* --------------------------------------------------------- scheduled money */
+  var schedCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+  function parsedSchedule(list) {
+    var hit = schedCache && list && schedCache.get(list);
+    if (hit && hit.len === list.length) return hit.rows;
+    var rows = (list || []).map(function (r) { return { t: U.parseMonth(r.from), row: r }; })
+      .sort(function (a, b) { return a.t - b.t; });
+    if (schedCache && list) schedCache.set(list, { len: list.length, rows: rows });
+    return rows;
+  }
   function scheduleValue(list, t, key) {
-    var sorted = (list || []).slice().sort(function (a, b) { return U.parseMonth(a.from) - U.parseMonth(b.from); });
-    var v = 0, last = null;
-    sorted.forEach(function (row) { if (U.parseMonth(row.from) <= t) { v = row[key]; last = row; } });
-    return { value: v, since: last ? U.parseMonth(last.from) : null, isLast: last === sorted[sorted.length - 1] };
+    var rows = parsedSchedule(list), v = 0, last = -1;
+    for (var i = 0; i < rows.length; i++) { if (rows[i].t <= t) { v = rows[i].row[key]; last = i; } else break; }
+    return { value: v, since: last >= 0 ? rows[last].t : null, isLast: last >= 0 && last === rows.length - 1 };
   }
   function baseContribution(cfg, t) {
     var s = scheduleValue(cfg.plan.contributions, t, 'monthly');
@@ -43,8 +51,16 @@
   function rentCost(cfg, M, t) { return cfg.plan.housingRent * M.rentIndex(t) / M.rentIndex(M.start); }
 
   /* net pay after federal, ND and payroll tax, for a given gross */
+  var payCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function netPay(cfg, year, gross) {
     if (gross <= 0) return 0;
+    var key = year + '|' + gross, m = payCache && payCache.get(cfg);
+    if (m && m[key] !== undefined) return m[key];
+    var v = netPayRaw(cfg, year, gross);
+    if (payCache) { if (!m) { m = {}; payCache.set(cfg, m); } m[key] = v; }
+    return v;
+  }
+  function netPayRaw(cfg, year, gross) {
     var tb = FPE.tax.tables(cfg, year);
     var tax = cfg.tax.enabled ? FPE.tax.yearTax(cfg, tb, { ordinary: gross, unrec1250: 0, ltcg: 0 }, 0).total : 0;
     return gross - tax - gross * FPE.data.TAX.fica;

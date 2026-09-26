@@ -67,7 +67,7 @@
     rates: 'September 2026. FHA 6.87% (lender sheets). Conventional investment 2–4 unit at 25% down 7.58–8.08% (lender sheets; 7.60% used). DSCR 6.125–7.375% by tier, typically 7.0–7.5% for a 680–720 FICO at 20–25% down, plus 0.125–0.25% for 2–4 units (vendor rate pages) — 7.35% used with a 5-year prepayment penalty. DSCR does NOT price below agency: the September 2026 audit corrected an earlier claim. Conventional owner-occupied and commercial are ESTIMATES. Rates are held flat by default — no forecast is built in.',
     rateRandom: 'Uncertainty layer only: a mean-reverting random walk shared by every product, so a rate shock reaches refinances, balloons and the HELOC together.',
     commercial: 'A 5–8 unit does not qualify for agency small-balance programs (those start around $2M). It is a local bank portfolio loan: ~7.25%, 20–25 year amortization, 5-year balloon, 75% LTV, recourse. EXTRAPOLATED — confirm with Bell Bank, Gate City, Bremer or Choice Bank.',
-    fha: 'FHA: 3.5% down, 1.75% upfront MIP financed, 0.55%/yr annual MIP for the life of the loan when down payment is under 10%. One FHA loan at a time. For 3–4 units the SELF-SUFFICIENCY test applies: 75% of the appraiser\'s market rent for ALL units (yours included) must cover the full payment (HUD 4000.1). FHA loans cannot be recast.',
+    fha: 'FHA: 3.5% down, 1.75% upfront MIP financed, 0.55%/yr annual MIP for the life of the loan when down payment is under 10%. One FHA loan at a time. For 3–4 units the SELF-SUFFICIENCY test applies: 75% of the appraiser\'s market rent for ALL units (yours included) must cover the full payment (HUD 4000.1). FHA loans cannot be recast. The 2026 Cass County loan limits in the engine are ESTIMATES carried from the conforming-limit ratio, not re-verified against HUD\'s published table — check before relying on a 4-unit FHA purchase near the limit.',
     convOO: 'Fannie Mae allows 5% down on an owner-occupied 2–4 unit (since Nov 2023). PMI ends automatically at 78% of original value. Qualification is debt-to-income, not DSCR. Counts toward the 10 financed properties.',
     convInv: 'Fannie Mae 2–4 unit investment purchase: 25% down; approval by debt-to-income using 75% of lease or appraised rent (B3-3.1-08); reserves of 6 months on the subject plus 2%/4%/6% of the unpaid balance of other financed properties for 1–4/5–6/7–10 financed (B3-4.1-01, VERIFIED); maximum 10 financed properties including your home.',
     dscr: 'DSCR (non-QM): approval by GROSS rent ÷ PITIA, typically ≥ 1.0. For a leased unit most lenders use the LESSER of the lease and the appraiser\'s market rent; vacant units use market rent (vendor lender guides). The September 2026 audit corrected an earlier version that used the GREATER of the two on an NOI basis. 75–80% LTV, reserves 2–6 months, 5-4-3-2-1 prepayment penalty standard (no penalty costs ~+0.75% in rate). No limit on property count; can close in an LLC.',
@@ -114,21 +114,33 @@
     breakers: 'Circuit breakers pause buying when a condition trips, and the timeline marks it. They are portfolio-level: every property in a failing portfolio passed its own underwriting on the day it was bought.',
     career: 'Going part-time and then quitting are modelled as coupled events: contributions change, living costs must come from the portfolio, your W-2 disappears from debt-to-income (so conventional and FHA loans need two years of rental history), your hours free up for REPS, and your tax bracket moves. Refinance and buy owner-occupied BEFORE you quit, while you still qualify.',
     ownHome: 'Buying your own home later takes a down payment, adds its payment to your debt-to-income, uses one of Fannie Mae\'s 10 financed-property slots, and moves the Primary Residence Credit to it.',
+    heloc: 'ESTIMATE. Most banks will not open a HELOC on investment property; the credit unions and portfolio lenders that do cap combined loan-to-value around 70–80% and cap the line itself (often $100K–$250K). The draw payment counts in debt-to-income. The line can be frozen or cut in a downturn — the 2008–09 pattern — which is why the freeze option exists.',
+    archetypes: 'An archetype is a typical building of its size, interpolated across the sold comps from the cheapest (quality 0) to the best-kept (quality 1). The triplex archetype rests on TWO sales, an 1898 and a 1949 building, both with owner-paid heat — it is the cheapest per unit and the plan leans on it. The 5–8 unit archetype has no sold comps at all and is off unless you switch it on.',
+    evictions: 'ESTIMATE. North Dakota evictions move fast by national standards (a 3-day notice and a hearing within weeks), but the cost still stacks up: filing and attorney, rent not covered by the deposit, cleanup, then a turnover. 1–2% of units a year is typical for workforce housing; the base run charges the expected cost every month, the uncertainty layer draws actual evictions.',
+    shortfall: 'What happens when a run of bad months meets a thin cash balance. A real owner defers what can wait (refreshes, a replacement for a few months), leans on a credit line, and only then sells. The engine does the same, in that order, and the uncertainty layer counts how often each step is needed.',
     headline: 'The headline is the income that the chosen share of simulated futures meets or beats at your target date (the "80% case" by default). A path that runs out of cash scores zero, which is how fragile plans are penalised.'
+  };
+
+  var RENT_BR = [0, 1, 2, 3, 4].map(function (b) { return FPE.RAW_DATA.marketObservations.rentByBedroom.values[String(b)]; });
+  var PS_BR = [0, 1, 2, 3, 4].map(function (b) { return FPE.RAW_DATA.marketObservations.hcvPaymentStandards2026.values[String(b)]; });
+
+  /* How much to trust each input, shown beside it everywhere. */
+  var PROVENANCE = {
+    verified: { label: 'Verified', text: 'Checked against a primary source: law, an agency guide, or government data.' },
+    vendor:   { label: 'Lender terms', text: 'One lender\'s or vendor\'s published terms. Others differ — get quotes.' },
+    rule:     { label: 'Rule', text: 'How a law or program works. The engine applies it; change it only if the rule changes.' },
+    estimate: { label: 'Estimate', text: 'Reasoned from comparable data, not checked for your case.' },
+    guess:    { label: 'Guess', text: 'A placeholder with little evidence behind it. The sensitivity view shows whether it matters.' },
+    yours:    { label: 'Yours', text: 'About you — only you can supply it.' },
+    choice:   { label: 'Choice', text: 'A decision. Set it to what you would actually do.' },
+    derived:  { label: 'Derived', text: 'Computed from other inputs.' }
   };
 
   FPE.data = {
     raw: FPE.RAW_DATA,
-    TAX: TAX, LENDER: LENDER, NOTES: NOTES,
-    rentByBedroom: function (br) {
-      var v = FPE.RAW_DATA.marketObservations.rentByBedroom.values;
-      var k = String(Math.max(0, Math.min(4, Math.round(br))));
-      return v[k];
-    },
-    paymentStandard: function (br) {
-      var v = FPE.RAW_DATA.marketObservations.hcvPaymentStandards2026.values;
-      return v[String(Math.max(0, Math.min(4, Math.round(br))))];
-    },
+    TAX: TAX, LENDER: LENDER, NOTES: NOTES, PROVENANCE: PROVENANCE,
+    rentByBedroom: function (br) { return RENT_BR[Math.max(0, Math.min(4, Math.round(br)))]; },
+    paymentStandard: function (br) { return PS_BR[Math.max(0, Math.min(4, Math.round(br)))]; },
     utilityAllowance: function (br, tenantPaysHeat) {
       var u = FPE.RAW_DATA.marketObservations.hcvUtilityAllowanceEstimate;
       var t = tenantPaysHeat ? u.tenantPaysHeat : u.ownerPaysHeat;

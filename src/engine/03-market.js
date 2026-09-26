@@ -74,29 +74,31 @@
 
     function recAt(t) { var i2 = k(t); return rec[i2] || null; }
     function intens(t) { return intensity[k(t)]; }
-    function rentIndex(t) {
-      var r = recAt(t), x = intens(t);
-      return rentTrend[k(t)] * (1 - (r ? r.rentDrop * x : 0));
-    }
-
-    /* ---------------------------------------------------- cap rates, prices */
     function yearsFromData(t) { return (t - dataMonth) / 12; }
-    function capRate(t) {
-      var r = recAt(t), x = intens(t);
-      var c = CAP0 + ((M.capRateDriftBps || 0) / 10000) * yearsFromData(t);
-      if (r) c += (r.capAddBps / 10000) * x;
-      return Math.max(0.02, c);
+
+    /* ------------------------------------ rents, cap rates, prices (tabulated) */
+    var rentIdx = new Float64Array(N), capIdx = new Float64Array(N), priceIdx = new Float64Array(N);
+    for (i = 0; i < N; i++) {
+      var ti = origin + i, ri = rec[i] || null, xi = intensity[i];
+      rentIdx[i] = rentTrend[i] * (1 - (ri ? ri.rentDrop * xi : 0));
+      var c = CAP0 + ((M.capRateDriftBps || 0) / 10000) * yearsFromData(ti);
+      if (ri) c += (ri.capAddBps / 10000) * xi;
+      capIdx[i] = Math.max(0.02, c);
+      if (M.priceTracksRents !== false) priceIdx[i] = rentIdx[i] * CAP0 / capIdx[i];
+      else priceIdx[i] = Math.pow(1 + M.appreciation, yearsFromData(ti)) * (ri ? CAP0 / (CAP0 + (ri.capAddBps / 10000) * xi) : 1);
     }
-    function priceIndex(t) {
-      if (M.priceTracksRents !== false) return rentIndex(t) * CAP0 / capRate(t);
-      var r = recAt(t), x = intens(t);
-      var base = Math.pow(1 + M.appreciation, yearsFromData(t));
-      return base * (r ? CAP0 / (CAP0 + (r.capAddBps / 10000) * x) : 1);
-    }
+    function rentIndex(t) { return rentIdx[k(t)]; }
+    function capRate(t) { return capIdx[k(t)]; }
+    function priceIndex(t) { return priceIdx[k(t)]; }
 
     /* ------------------------------------------------- costs and insurance */
-    function expenseIndex(t) { return Math.pow(1 + M.expenseInflation, yearsFromData(t)); }
-    function cpiIndex(t) { return Math.pow(1 + M.cpi, (t - start) / 12); }
+    var expIdx = new Float64Array(N), cpiIdx = new Float64Array(N);
+    for (i = 0; i < N; i++) {
+      expIdx[i] = Math.pow(1 + M.expenseInflation, (origin + i - dataMonth) / 12);
+      cpiIdx[i] = Math.pow(1 + M.cpi, (origin + i - start) / 12);
+    }
+    function expenseIndex(t) { var j = t - origin; return j >= 0 && j < N ? expIdx[j] : Math.pow(1 + M.expenseInflation, yearsFromData(t)); }
+    function cpiIndex(t) { var j = t - origin; return j >= 0 && j < N ? cpiIdx[j] : Math.pow(1 + M.cpi, (t - start) / 12); }
     var insIdx = new Float64Array(N);
     for (i = 0; i < N; i++) {
       var tt = origin + i;
