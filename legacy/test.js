@@ -1,6 +1,6 @@
 /* Engine test suite — run with: node test.js */
-var E = require('./src/engine.js');
-var D = require('./src/defaults.js');
+var E = require('./engine.js');
+var D = require('./defaults.js');
 
 var pass = 0, fail = 0, failures = [];
 function ok(name, cond, detail) {
